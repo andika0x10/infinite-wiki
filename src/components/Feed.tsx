@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { FeedSession } from "@/lib/feed";
-import { GenerationClient } from "@/services/articles";
+import { FeedClient } from "@/services/articles";
 import { SiteHeader } from "./SiteHeader";
 import { TopicPath } from "./TopicPath";
 import { FeedStatus } from "./FeedStatus";
 
 export function Feed() {
-  const [session] = useState(() => new FeedSession(new GenerationClient()));
+  const [session] = useState(() => new FeedSession(new FeedClient()));
   const { entries, error } = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getServerSnapshot);
   const [active, setActive] = useState(0);
   const container = useRef<HTMLElement>(null);
@@ -17,6 +17,7 @@ export function Feed() {
   useEffect(() => {
     void session.ensure(active);
   }, [session, active]);
+  useEffect(() => () => session.stop(), [session]);
   useEffect(
     () => () => {
       if (frame.current !== null) cancelAnimationFrame(frame.current);

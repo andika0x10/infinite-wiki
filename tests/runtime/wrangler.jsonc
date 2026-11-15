@@ -1,0 +1,11 @@
+{
+  "name": "catalog-runtime-tests",
+  "main": "worker.ts",
+  "compatibility_date": "2026-06-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [{ "binding": "DB", "database_name": "runtime-tests", "database_id": "runtime-tests" }],
+  "durable_objects": { "bindings": [{ "name": "CATALOG", "class_name": "CatalogCoordinator" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["CatalogCoordinator"] }],
+  "services": [{ "binding": "SEMANTIC_INDEX", "service": "catalog-runtime-tests", "entrypoint": "SemanticIndexFake" }],
+  "vars": { "GEMINI_API_KEY": "runtime-test-key" },
+}

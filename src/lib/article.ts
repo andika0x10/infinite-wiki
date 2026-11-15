@@ -3,7 +3,17 @@ export interface ArticleContent {
   importance: string;
 }
 
-export type ArticleErrorCode = "INVALID_TOPIC" | "NOT_CONFIGURED" | "RATE_LIMITED" | "TIMEOUT" | "INVALID_RESPONSE" | "UPSTREAM_ERROR" | "EMPTY_BRANCHES";
+export type ArticleErrorCode =
+  | "INVALID_TOPIC"
+  | "INVALID_CURSOR"
+  | "NOT_CONFIGURED"
+  | "RATE_LIMITED"
+  | "TIMEOUT"
+  | "INVALID_RESPONSE"
+  | "UPSTREAM_ERROR"
+  | "EMPTY_BRANCHES"
+  | "CACHE_UNAVAILABLE"
+  | "DEDUPLICATION_UNAVAILABLE";
 
 export interface ArticleErrorBody {
   error: { code: ArticleErrorCode; message: string; retryAfter?: number };

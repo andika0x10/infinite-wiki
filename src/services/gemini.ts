@@ -1,4 +1,3 @@
-import "server-only";
 import { ArticleError, isArticleContent, type ArticleContent } from "../lib/article";
 import { isBranches, isRecord, type Branch, type Topic } from "../lib/topics";
 
@@ -31,7 +30,7 @@ const articleSchema = {
   additionalProperties: false,
 };
 
-async function generate(instruction: string, input: unknown, schema: object, apiKey: string | undefined, fetcher: typeof fetch): Promise<unknown> {
+export async function generate(instruction: string, input: unknown, schema: object, apiKey: string | undefined, fetcher: typeof fetch): Promise<unknown> {
   if (!apiKey?.trim()) throw new ArticleError("NOT_CONFIGURED", "Layanan bacaan belum dikonfigurasi. Hubungi pengelola situs.", 503);
   let response: Response;
   try {

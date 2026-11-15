@@ -9,7 +9,8 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "infinite-wiki",
-  "main": ".open-next/worker.js",
+  "account_id": "3733a7977c6783973d0ee237b086aa34",
+  "main": "custom-worker.ts",
   "compatibility_date": "2026-06-15",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "assets": {
@@ -31,6 +32,23 @@
   ],
   "observability": {
     "enabled": true,
+    "traces": { "enabled": true },
+  },
+  "d1_databases": [{ "binding": "DB", "database_name": "infinite-wiki-cache", "database_id": "5d8bcc99-f064-4734-8d60-f6435ad16db6", "migrations_dir": "migrations" }],
+  "durable_objects": { "bindings": [{ "name": "CATALOG", "class_name": "CatalogCoordinator" }] },
+  "migrations": [{ "tag": "v1-catalog", "new_sqlite_classes": ["CatalogCoordinator"] }],
+  "secrets": { "required": ["GEMINI_API_KEY"] },
+  "vectorize": [{ "binding": "SEMANTIC_INDEX", "index_name": "infinite-wiki-semantic-v1", "remote": true }],
+  "env": {
+    "development": {
+      "name": "infinite-wiki-development",
+      "images": { "binding": "IMAGES" },
+      "secrets": { "required": ["GEMINI_API_KEY"] },
+      "d1_databases": [{ "binding": "DB", "database_name": "infinite-wiki-cache-development", "migrations_dir": "migrations" }],
+      "durable_objects": { "bindings": [{ "name": "CATALOG", "class_name": "CatalogCoordinator" }] },
+      "vectorize": [{ "binding": "SEMANTIC_INDEX", "index_name": "infinite-wiki-semantic-dev-v1", "remote": true }],
+      "services": [{ "binding": "WORKER_SELF_REFERENCE", "service": "infinite-wiki-development" }],
+    },
   },
   "upload_source_maps": true,
   /**

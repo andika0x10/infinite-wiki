@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { entries as makeEntries } from "../fixtures";
 
 const content = {
   explanation: [
@@ -9,36 +10,57 @@ const content = {
   importance:
     "Memahami komputasi memberi kita cara untuk menilai ketepatan, efisiensi, dan batas sebuah sistem. Pengetahuan ini menjadi landasan untuk mempelajari algoritma, arsitektur komputer, jaringan, hingga kecerdasan buatan.",
 };
-async function mockFeed(page: Page, options: { slow?: boolean; long?: boolean; failArticle?: number; rateLimit?: boolean } = {}) {
-  let batch = 0;
+async function mockFeed(page: Page, options: { slow?: boolean; long?: boolean; longTitle?: boolean; failArticle?: number; rateLimit?: boolean } = {}) {
   let calls = 0;
-  const requests: string[] = [];
-  await page.route("**/api/branches", async (route) => {
-    requests.push("branches");
-    if (options.slow) await new Promise((resolve) => setTimeout(resolve, 1200));
-    const titles =
-      batch === 0 ? ["Algorithms", "Operating systems", "Programming languages", "Computer architecture"] : Array.from({ length: 4 }, (_, i) => `Concept ${batch * 4 + i}`);
-    batch++;
-    await route.fulfill({ json: { branches: titles.map((title) => ({ title, description: "Memahami gagasan, cara kerja, dan hubungan konsep ini dengan komputasi." })) } });
-  });
-  await page.route("**/api/articles", async (route) => {
-    requests.push("articles");
-    calls++;
-    if (calls === options.failArticle) {
-      await route.fulfill({
-        status: options.rateLimit ? 429 : 502,
-        json: { error: { message: "Layanan bacaan sedang tidak tersedia. Coba lagi.", retryAfter: options.rateLimit ? 2 : undefined } },
-      });
-      return;
+  let failed = false;
+  const catalog = makeEntries(100).map((entry) => {
+    if (options.longTitle && entry.sequence > 1) {
+      entry.topic.title = `HyperdimensionalComputerArchitectureAndRepresentation${entry.sequence}`;
+      entry.topic.path[entry.topic.path.length - 1] = entry.topic.title;
     }
-    const topic = route.request().postDataJSON().topic;
-    await route.fulfill({
-      json: {
+    return {
+      ...entry,
+      content: {
         ...content,
         explanation: options.long
           ? Array.from({ length: 4 }, () => content.explanation.join(" ").repeat(2))
-          : [topic.title + ". " + content.explanation[0], ...content.explanation.slice(1)],
+          : [entry.topic.title + ". " + content.explanation[0], ...content.explanation.slice(1)],
       },
+    };
+  });
+  let available = options.failArticle ? 1 : catalog.length;
+  const requests: string[] = [];
+  await page.route("**/api/feed**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith("/extend")) {
+      requests.push("extend");
+      calls++;
+      if (options.failArticle && !failed) {
+        failed = true;
+        await route.fulfill({
+          status: options.rateLimit ? 429 : 502,
+          json: {
+            error: {
+              code: options.rateLimit ? "RATE_LIMITED" : "UPSTREAM_ERROR",
+              message: "Layanan bacaan sedang tidak tersedia. Coba lagi.",
+              retryAfter: options.rateLimit ? 2 : undefined,
+            },
+          },
+        });
+        return;
+      }
+      available++;
+      await route.fulfill({ json: { status: "cached" } });
+      return;
+    }
+    requests.push("feed");
+    if (options.slow && calls === 0) await new Promise((resolve) => setTimeout(resolve, 1200));
+    const after = Number(url.searchParams.get("after"));
+    const limit = Number(url.searchParams.get("limit"));
+    const selected = catalog.slice(after, Math.min(available, after + limit));
+    calls += selected.length;
+    await route.fulfill({
+      json: { entries: selected, nextCursor: selected.at(-1)?.sequence ?? after, hasMore: available > after + selected.length, generation: { state: "idle" } },
     });
   });
   return { requests, calls: () => calls };
@@ -50,11 +72,11 @@ async function advance(page: Page, index: number) {
   await expect(page.locator(".reading-index")).toHaveText(String(index + 2).padStart(2, "0"));
 }
 
-test("feed starts with branches, one article ahead, IBM fonts and black/white design", async ({ page }, info) => {
+test("feed reads the shared cache, one article ahead, IBM fonts and black/white design", async ({ page }, info) => {
   const mock = await mockFeed(page);
   await page.goto("/");
   await expect(page.locator("article.feed-slide[data-ready=true]")).toHaveCount(2);
-  expect(mock.requests).toEqual(["branches", "articles", "articles"]);
+  expect(mock.requests).toEqual(["feed"]);
   expect(await page.locator("body").evaluate((element) => getComputedStyle(element).backgroundColor)).toBe("rgb(255, 255, 255)");
   expect(
     await page
@@ -184,17 +206,7 @@ test("long articles remain fully scrollable before next slide; keyboard controls
 
 test("mobile 320px, long title, 404 and legacy redirect", async ({ page }, info) => {
   await page.setViewportSize({ width: 320, height: 740 });
-  await mockFeed(page);
-  await page.route("**/api/branches", async (route) =>
-    route.fulfill({
-      json: {
-        branches: Array.from({ length: 4 }, (_, i) => ({
-          title: `HyperdimensionalComputerArchitectureAndRepresentation${i}`,
-          description: "Deskripsi konsep yang cukup panjang untuk menguji layar kecil.",
-        })),
-      },
-    })
-  );
+  await mockFeed(page, { longTitle: true });
   await page.goto("/artikel/system-call");
   await expect(page).toHaveURL(/\/$/);
   await advance(page, 0);
@@ -209,20 +221,14 @@ test("mobile 320px, long title, 404 and legacy redirect", async ({ page }, info)
   await expect(page.locator(".feed")).toBeVisible();
 });
 
-test("invalid API inputs fail before calling Gemini", async ({ request }) => {
-  for (const endpoint of ["articles", "branches"]) {
-    for (const data of [
-      { slug: "system-call" },
-      { topic: { title: "Physics" } },
-      { topic: { id: "x", title: "x", description: "x", parentId: null, path: ["Computer science", "x"] } },
-    ]) {
-      const response = await request.post(`/api/${endpoint}`, { data });
-      expect(response.status()).toBe(400);
-      expect((await response.json()).error.code).toBe("INVALID_TOPIC");
-    }
-    const malformed = await request.post(`/api/${endpoint}`, { data: "{" });
-    expect(malformed.status()).toBe(400);
-    const oversized = await request.post(`/api/${endpoint}`, { data: { payload: "x".repeat(25000) } });
-    expect(oversized.status()).toBe(413);
+test("invalid cursors fail before accessing bindings and direct generation routes are removed", async ({ request }) => {
+  for (const data of [{}, { after: -1 }, { after: "0" }, { after: 1.5 }, { topic: { title: "Physics" } }]) {
+    const response = await request.post("/api/feed/extend", { data });
+    expect(response.status()).toBe(400);
+    expect((await response.json()).error.code).toBe("INVALID_CURSOR");
   }
+  expect((await request.post("/api/feed/extend", { data: "{" })).status()).toBe(400);
+  expect((await request.post("/api/feed/extend", { data: { payload: "x".repeat(25000) } })).status()).toBe(413);
+  for (const query of ["after=-1", "after=NaN", "limit=0", "limit=21"]) expect((await request.get(`/api/feed?${query}`)).status()).toBe(400);
+  for (const endpoint of ["articles", "branches"]) expect((await request.post(`/api/${endpoint}`, { data: {} })).status()).toBe(404);
 });

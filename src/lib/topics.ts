@@ -3,7 +3,7 @@ export interface Topic {
   title: string;
   description: string;
   parentId: string | null;
-  /** Full session path; bounded context is sent to the server. */
+  /** Canonical ancestry; only the provider prompt receives bounded context. */
   path: string[];
 }
 export interface Branch {
@@ -21,7 +21,7 @@ export function normalizeTitle(title: string): string {
   return title
     .normalize("NFKC")
     .toLocaleLowerCase("en")
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/[^\p{L}\p{N}+#]+/gu, " ")
     .trim();
 }
 export function isRecord(value: unknown): value is Record<string, unknown> {
@@ -36,7 +36,7 @@ export function isBranch(value: unknown): value is Branch {
 export function isBranches(value: unknown): value is { branches: Branch[] } {
   return isRecord(value) && Array.isArray(value.branches) && value.branches.length === 4 && value.branches.every(isBranch);
 }
-export function isTopic(value: unknown): value is Topic {
+export function isTopic(value: unknown, maxDepth = 16): value is Topic {
   return (
     isBranch(value) &&
     isRecord(value) &&
@@ -44,7 +44,7 @@ export function isTopic(value: unknown): value is Topic {
     (value.parentId === null || text(value.parentId, 128)) &&
     Array.isArray(value.path) &&
     value.path.length >= 1 &&
-    value.path.length <= 16 &&
+    value.path.length <= maxDepth &&
     value.path.every((part: unknown) => text(part, 160)) &&
     value.path[0] === ROOT.title &&
     value.path.at(-1) === value.title &&

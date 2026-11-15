@@ -7,7 +7,7 @@ const plexSans = IBM_Plex_Sans({ variable: "--font-plex-sans", subsets: ["latin"
 
 export const metadata: Metadata = {
   title: "Infinite Wiki — Computer Science",
-  description: "Jelajahi Computer Science, satu bacaan setiap kali. Cabang pengetahuan dan artikel berbahasa Indonesia dibuat dengan Gemini saat Anda membaca.",
+  description: "Jelajahi katalog Computer Science berbahasa Indonesia yang dipakai bersama. Bacaan baru ditambahkan ketika pembaca mencapai ujung katalog.",
   icons: { icon: "/favicon.svg" },
 };
 
